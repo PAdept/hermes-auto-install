@@ -4,7 +4,7 @@
 set -e
 
 # --- Configuration Variables ---
-SUBDOMAIN="hermes.gholamthegreat.sbs"
+DEFAULT_SUBDOMAIN="hermes.gholamthegreat.sbs"
 TUNNEL_NAME="hermes"
 PORT="8787"
 
@@ -12,23 +12,30 @@ echo "========================================================="
 echo "   Starting Automated Hermes & Cloudflare Tunnel Setup   "
 echo "========================================================="
 
+# Prompt user for custom domain or use default
+read -p "Enter your target domain/subdomain [$DEFAULT_SUBDOMAIN]: " SUBDOMAIN
+SUBDOMAIN=${SUBDOMAIN:-$DEFAULT_SUBDOMAIN}
+
+echo "Target URL set to: https://$SUBDOMAIN"
+echo "---------------------------------------------------------"
+
 # 1. Update system and install required packages
-echo "[1/6] Updating system and installing dependencies..."
+echo "[1/7] Updating system and installing dependencies..."
 apt update && apt install -y curl git build-essential libatomic1 xz-utils
 
 # 2. Download and install cloudflared
-echo "[2/6] Installing Cloudflare Tunnel (cloudflared)..."
+echo "[2/7] Installing Cloudflare Tunnel (cloudflared)..."
 curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
 dpkg -i cloudflared.deb
 rm cloudflared.deb
 
 # 3. Cloudflare authentication
-echo "[3/6] Please log in to your Cloudflare account:"
+echo "[3/7] Please log in to your Cloudflare account:"
 echo "Open the URL below in your browser and authorize your domain."
 cloudflared tunnel login
 
 # 4. Create tunnel and route DNS
-echo "[4/6] Creating tunnel and routing DNS to $SUBDOMAIN ..."
+echo "[4/7] Creating tunnel and routing DNS to $SUBDOMAIN ..."
 cloudflared tunnel delete -f $TUNNEL_NAME >/dev/null 2>&1 || true
 
 # Capture both stdout and stderr to parse the tunnel UUID accurately
@@ -47,7 +54,7 @@ echo "Created Tunnel UUID: $TUNNEL_ID"
 cloudflared tunnel route dns $TUNNEL_NAME $SUBDOMAIN
 
 # 5. Generate configuration file (config.yml)
-echo "[5/6] Configuring cloudflared config file..."
+echo "[5/7] Configuring cloudflared config file..."
 mkdir -p ~/.cloudflared
 cat <<EOF > ~/.cloudflared/config.yml
 tunnel: $TUNNEL_ID
@@ -65,8 +72,12 @@ systemctl daemon-reload
 systemctl enable cloudflared
 systemctl restart cloudflared
 
-# 6. Setup Hermes WebUI
-echo "[6/6] Setting up Hermes WebUI..."
+# 6. Install Hermes Agent
+echo "[6/7] Installing Hermes Agent..."
+curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+
+# 7. Setup Hermes WebUI
+echo "[7/7] Setting up Hermes WebUI..."
 if [ ! -d "$HOME/hermes-webui" ]; then
     git clone https://github.com/nesquena/hermes-webui.git $HOME/hermes-webui
 fi
