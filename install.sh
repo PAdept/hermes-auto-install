@@ -4,18 +4,13 @@
 set -e
 
 # --- Configuration Variables ---
-DEFAULT_SUBDOMAIN="hermes.gholamthegreat.sbs"
+SUBDOMAIN="hermes.gholamthegreat.sbs"
 TUNNEL_NAME="hermes"
 PORT="8787"
 
 echo "========================================================="
 echo "   Starting Automated Hermes & Cloudflare Tunnel Setup   "
 echo "========================================================="
-
-# Prompt user for custom domain or use default
-read -p "Enter your target domain/subdomain [$DEFAULT_SUBDOMAIN]: " SUBDOMAIN
-SUBDOMAIN=${SUBDOMAIN:-$DEFAULT_SUBDOMAIN}
-
 echo "Target URL set to: https://$SUBDOMAIN"
 echo "---------------------------------------------------------"
 
@@ -38,7 +33,6 @@ cloudflared tunnel login
 echo "[4/7] Creating tunnel and routing DNS to $SUBDOMAIN ..."
 cloudflared tunnel delete -f $TUNNEL_NAME >/dev/null 2>&1 || true
 
-# Capture both stdout and stderr to parse the tunnel UUID accurately
 TUNNEL_OUTPUT=$(cloudflared tunnel create $TUNNEL_NAME 2>&1)
 TUNNEL_ID=$(echo "$TUNNEL_OUTPUT" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -n 1)
 
