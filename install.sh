@@ -1,53 +1,53 @@
 #!/bin/bash
 
-# خروج فوری در صورت بروز خطا
+# Exit immediately if a command exits with a non-zero status
 set -e
 
-# --- تنظیمات متغیرها ---
+# --- Configuration Variables ---
 SUBDOMAIN="hermes.gholamthegreat.sbs"
 TUNNEL_NAME="hermes"
 PORT="8787"
 
-echo "========================================="
-echo "   شروع نصب خودکار Hermes و Cloudflare Tunnel   "
-echo "========================================="
+echo "========================================================="
+echo "   Starting Automated Hermes & Cloudflare Tunnel Setup   "
+echo "========================================================="
 
-# ۱. به‌روزرسانی سیستم و نصب ابزارهای پایه
-echo "[1/6] در حال به‌روزرسانی سیستم و نصب پیش‌نیازها..."
+# 1. Update system and install required packages
+echo "[1/6] Updating system and installing dependencies..."
 apt update && apt install -y curl git build-essential libatomic1 xz-utils
 
-# ۲. دانلود و نصب cloudflared
-echo "[2/6] در حال نصب Cloudflare Tunnel (cloudflared)..."
+# 2. Download and install cloudflared
+echo "[2/6] Installing Cloudflare Tunnel (cloudflared)..."
 curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
 dpkg -i cloudflared.deb
 rm cloudflared.deb
 
-# ۳. ورود به حساب کلاودفلر
-echo "[3/6] لطفاً وارد حساب Cloudflare خود شوید:"
-echo "یک لینک در ادامه نمایش داده می‌شود، آن را در مرورگر باز کرده و دامنه خود را انتخاب کنید."
+# 3. Cloudflare authentication
+echo "[3/6] Please log in to your Cloudflare account:"
+echo "Open the URL below in your browser and authorize your domain."
 cloudflared tunnel login
 
-# ۴. ساخت تونل و روت کردن DNS
-echo "[4/6] در حال ایجاد تونل و تنظیم DNS روی $SUBDOMAIN ..."
-# پاکسازی تونل‌های همنام قدیمی در صورت وجود
+# 4. Create tunnel and route DNS
+echo "[4/6] Creating tunnel and routing DNS to $SUBDOMAIN ..."
 cloudflared tunnel delete -f $TUNNEL_NAME >/dev/null 2>&1 || true
 
-# ساخت تونل جدید و دریافت UUID
-TUNNEL_OUTPUT=$(cloudflared tunnel create $TUNNEL_NAME)
-TUNNEL_ID=$(echo "$TUNNEL_OUTPUT" | grep -oE '[a-0-9]{8}-[a-0-9]{4}-[a-0-9]{4}-[a-0-9]{4}-[a-0-9]{12}' | head -n 1)
+# Capture both stdout and stderr to parse the tunnel UUID accurately
+TUNNEL_OUTPUT=$(cloudflared tunnel create $TUNNEL_NAME 2>&1)
+TUNNEL_ID=$(echo "$TUNNEL_OUTPUT" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -n 1)
 
 if [ -z "$TUNNEL_ID" ]; then
-    echo "خطا در دریافت شناسه (UUID) تونل!"
+    echo "Error: Failed to retrieve tunnel UUID!"
+    echo "Cloudflare output:"
+    echo "$TUNNEL_OUTPUT"
     exit 1
 fi
 
-echo "شناسه تونل ایجاد شده: $TUNNEL_ID"
+echo "Created Tunnel UUID: $TUNNEL_ID"
 
-# اتصال ساب‌دامنه به تونل
 cloudflared tunnel route dns $TUNNEL_NAME $SUBDOMAIN
 
-# ۵. ایجاد فایل تنظیمات (config.yml)
-echo "[5/6] در حال پیکربندی فایل تنظیمات cloudflared..."
+# 5. Generate configuration file (config.yml)
+echo "[5/6] Configuring cloudflared config file..."
 mkdir -p ~/.cloudflared
 cat <<EOF > ~/.cloudflared/config.yml
 tunnel: $TUNNEL_ID
@@ -59,22 +59,20 @@ ingress:
   - service: http_status:404
 EOF
 
-# نصب و فعال‌سازی سرویس cloudflared
 systemctl stop cloudflared >/dev/null 2>&1 || true
 cloudflared service install >/dev/null 2>&1 || true
 systemctl daemon-reload
 systemctl enable cloudflared
 systemctl restart cloudflared
 
-# ۶. نصب Hermes WebUI (در صورت عدم وجود)
-echo "[6/6] در حال آماده‌سازی Hermes WebUI..."
+# 6. Setup Hermes WebUI
+echo "[6/6] Setting up Hermes WebUI..."
 if [ ! -d "$HOME/hermes-webui" ]; then
     git clone https://github.com/nesquena/hermes-webui.git $HOME/hermes-webui
 fi
 
 cd $HOME/hermes-webui
 
-# ساخت سرویس systemd برای اجرای دائمی Hermes WebUI
 cat <<EOF > /etc/systemd/system/hermes-webui.service
 [Unit]
 Description=Hermes WebUI Service
@@ -98,7 +96,7 @@ systemctl daemon-reload
 systemctl enable hermes-webui
 systemctl restart hermes-webui
 
-echo "========================================="
-echo "   ✅ نصب و راه‌اندازی با موفقیت انجام شد!   "
-echo "   آدرس دسترسی شما: https://$SUBDOMAIN   "
-echo "========================================="
+echo "========================================================="
+echo "   ✅ Installation completed successfully!               "
+echo "   Access URL: https://$SUBDOMAIN                        "
+echo "========================================================="
